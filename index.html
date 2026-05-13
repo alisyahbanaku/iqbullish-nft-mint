@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQBullish NFT Mint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6/dist/ethers.umd.min.js"></script>
+    <style>
+        body { background: #0a0e17; }
+        .gradient-text { background: linear-gradient(to right, #06b6d4, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .gradient-btn { background: linear-gradient(to right, #06b6d4, #8b5cf6); }
+        .gradient-btn:hover { background: linear-gradient(to right, #22d3ee, #a78bfa); }
+        .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="min-h-screen text-white flex flex-col items-center justify-center p-6">
+    <div class="max-w-md w-full space-y-8 text-center">
+        <!-- Logo -->
+        <div class="space-y-4">
+            <img src="https://iqbullish.xyz/logo.svg" alt="IQBullish" class="w-24 h-24 mx-auto">
+            <h1 class="text-3xl font-bold gradient-text">IQBullish Genesis</h1>
+            <p class="text-gray-400">Mint your NFT on Sepolia Testnet</p>
+        </div>
+
+        <!-- Connect Button -->
+        <button id="connectBtn" onclick="connectWallet()" class="gradient-btn px-8 py-3 rounded-xl font-bold text-lg transition-all hover:scale-105">
+            Connect Wallet
+        </button>
+
+        <!-- Wallet Info (hidden initially) -->
+        <div id="walletInfo" class="hidden space-y-4">
+            <div class="glass p-4 rounded-2xl space-y-2">
+                <p class="text-sm text-gray-400">Connected as</p>
+                <p id="walletAddress" class="text-xs font-mono text-cyan-400 break-all"></p>
+                <p id="walletBalance" class="text-sm text-gray-400"></p>
+            </div>
+
+            <!-- NFT Preview -->
+            <div class="glass p-6 rounded-2xl space-y-4">
+                <img src="https://iqbullish.xyz/logo.svg" alt="NFT Preview" class="w-32 h-32 mx-auto">
+                <div>
+                    <p class="font-semibold text-lg">IQBullish Genesis NFT</p>
+                    <p class="text-sm text-gray-400">Network: Sepolia</p>
+                    <p class="text-sm text-gray-400">Price: FREE</p>
+                </div>
+
+                <button id="mintBtn" onclick="mintNFT()" class="w-full py-3 px-6 rounded-xl font-bold text-lg gradient-btn transition-all hover:scale-105">
+                    Mint NFT (Free)
+                </button>
+            </div>
+
+            <!-- Result -->
+            <div id="mintResult" class="hidden p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+                <p class="text-green-400 font-semibold">✅ NFT Minted Successfully!</p>
+                <a id="txLink" href="#" target="_blank" class="text-sm text-cyan-400 underline">View on Etherscan →</a>
+            </div>
+
+            <!-- Error -->
+            <div id="mintError" class="hidden p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                <p class="text-red-400 font-semibold">❌ Error</p>
+                <p id="errorMsg" class="text-sm text-red-300 mt-1"></p>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="text-xs text-gray-500 space-y-1">
+            <p>Contract: 0xc786faa7bE1652A177824Cc507415F5649f991b0</p>
+            <p>Network: Sepolia Testnet (Chain ID: 11155111)</p>
+            <p class="mt-2">
+                Need Sepolia ETH? 
+                <a href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia" target="_blank" class="text-cyan-400 underline">Get from faucet</a>
+            </p>
+        </div>
+
+        <p class="text-gray-600 text-xs">
+            Created by <a href="https://iqbullish.xyz" target="_blank" class="text-cyan-400">iqbullish.xyz</a>
+        </p>
+    </div>
+
+    <script>
+        const CONTRACT_ADDRESS = '0xc786faa7bE1652A177824Cc507415F5649f991b0';
+        const ABI = [
+            {
+                inputs: [
+                    { internalType: 'address', name: 'to', type: 'address' },
+                    { internalType: 'string', name: 'tokenURI', type: 'string' }
+                ],
+                name: 'mint',
+                outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+                stateMutability: 'nonpayable',
+                type: 'function'
+            }
+        ];
+
+        const TOKEN_URI = 'data:application/json;base64,' + btoa(JSON.stringify({
+            name: 'IQBullish Genesis',
+            description: 'IQBullish Genesis NFT Collection on Sepolia',
+            image: 'https://iqbullish.xyz/logo.svg',
+            attributes: [
+                { trait_type: 'Collection', value: 'Genesis' },
+                { trait_type: 'Chain', value: 'Sepolia' },
+                { trait_type: 'Creator', value: 'iqbullish' }
+            ]
+        }));
+
+        const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
+
+        let provider, signer, userAddress;
+
+        async function connectWallet() {
+            if (!window.ethereum) {
+                alert('Please install MetaMask or another Web3 wallet!');
+                return;
+            }
+
+            try {
+                // Request accounts
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                userAddress = accounts[0];
+
+                // Switch to Sepolia
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: SEPOLIA_CHAIN_ID }]
+                    });
+                } catch (switchError) {
+                    if (switchError.code === 4902) {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: SEPOLIA_CHAIN_ID,
+                                chainName: 'Sepolia Testnet',
+                                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                                rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
+                                blockExplorerUrls: ['https://sepolia.etherscan.io']
+                            }]
+                        });
+                    }
+                }
+
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+
+                // Update UI
+                document.getElementById('connectBtn').textContent = 'Connected ✓';
+                document.getElementById('connectBtn').classList.add('opacity-50');
+                document.getElementById('walletInfo').classList.remove('hidden');
+                document.getElementById('walletAddress').textContent = userAddress;
+
+                // Get balance
+                const balance = await provider.getBalance(userAddress);
+                document.getElementById('walletBalance').textContent = 
+                    'Balance: ' + parseFloat(ethers.formatEther(balance)).toFixed(4) + ' Sepolia ETH';
+
+            } catch (err) {
+                console.error(err);
+                alert('Failed to connect: ' + err.message);
+            }
+        }
+
+        async function mintNFT() {
+            if (!signer) {
+                alert('Please connect wallet first!');
+                return;
+            }
+
+            const btn = document.getElementById('mintBtn');
+            const resultDiv = document.getElementById('mintResult');
+            const errorDiv = document.getElementById('mintError');
+
+            resultDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            btn.textContent = 'Confirm in Wallet...';
+            btn.disabled = true;
+
+            try {
+                const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+                const tx = await contract.mint(userAddress, TOKEN_URI);
+                
+                btn.textContent = 'Minting...';
+                await tx.wait();
+
+                // Success
+                btn.textContent = 'Minted! ✓';
+                resultDiv.classList.remove('hidden');
+                document.getElementById('txLink').href = 'https://sepolia.etherscan.io/tx/' + tx.hash;
+
+            } catch (err) {
+                console.error(err);
+                btn.textContent = 'Mint NFT (Free)';
+                btn.disabled = false;
+                errorDiv.classList.remove('hidden');
+                document.getElementById('errorMsg').textContent = err.reason || err.message || 'Transaction failed';
+            }
+        }
+
+        // Auto-connect if already connected
+        if (window.ethereum) {
+            window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+                if (accounts.length > 0) connectWallet();
+            });
+        }
+    </script>
+</body>
+</html>
